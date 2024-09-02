@@ -82,26 +82,73 @@ func (c *Client) StartClientLoop() {
 		c.createClientSocket()
 
 		// TODO: Modify the send to avoid short-write
-		fmt.Fprintf(
-			c.conn,
-			"[CLIENT %v] Message N°%v\n",
+		
+		msg := fmt.Sprintf(
+			"[AGENCY %v] Bet %v,%v,%v,%v,%v\n",
 			c.config.ID,
-			msgID,
+			os.getenv("NUMERO"),
+			os.getenv("NOMBRE"),
+			os.getenv("APELLIDO"),
+			os.getenv("DOCUMENTO"),
+			os.getenv("NACIMIENTO"),
 		)
-		msg, err := bufio.NewReader(c.conn).ReadString('\n')
-		c.conn.Close()
+		sent := 0
 
-		if err != nil {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+		for true {
+			bytes_sent, _ := fmt.Fprintf(
+				c.conn,
+				"[AGENCY %v] Bet %v,%v,%v,%v,%v\n",
 				c.config.ID,
-				err,
+				os.getenv("NUMERO"),
+				os.getenv("NOMBRE"),
+				os.getenv("APELLIDO"),
+				os.getenv("DOCUMENTO"),
+				os.getenv("NACIMIENTO"),
 			)
-			return
+
+			sent += bytes_sent
+			if sent == len(msg) {
+				break
+			}
 		}
 
-		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-			c.config.ID,
-			msg,
+
+
+		reader := bufio.NewReader(conn)
+		var msg string
+	
+		for true {
+			line, err := reader.ReadString('\n')
+			msg += line
+	
+			if err != nil {
+				//log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+				//	c.config.ID,
+				//	err,
+				//)
+	
+				log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v",
+					os.getenv("DOCUMENTO"),
+					os.getenv("NUMERO"),
+				)
+				return
+			}
+	
+			if len(line) > 0 && line[len(line)-1] == '\n' {
+				break
+			}
+		}
+
+		c.conn.Close()
+
+		//log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
+		//	c.config.ID,
+		//	msg,
+		//)
+
+		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
+			os.getenv("DOCUMENTO"),
+			os.getenv("NUMERO"),
 		)
 
 		// Wait a time between sending one message and the next one

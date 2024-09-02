@@ -2,6 +2,7 @@ import socket
 import logging
 import signal
 import sys
+from common.utils import Bet, store_bets
 
 
 class Server:
@@ -24,15 +25,18 @@ class Server:
         # TODO: Modify this program to handle signal to graceful shutdown
         # the server
 
+        bets = []
         signal.signal(signal.SIGTERM, self.__handle_sigterm)
 
         while not self.down:
             client_sock = self.__accept_new_connection()
             if self.down:
                 return
-            self.__handle_client_connection(client_sock)
+            self.__handle_client_connection(client_sock, bets)
 
-    def __handle_client_connection(self, client_sock):
+        store_bets(bets)
+
+    def __handle_client_connection(self, client_sock, bets):
         """
         Read message from a specific client socket and closes the socket
 
@@ -41,13 +45,28 @@ class Server:
         """
         try:
             # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).rstrip().decode('utf-8')
+            msg = client_sock.recv(1024)
+            if msg[-1] != '\n':
+                raise OSError
+            msg = msg.rstrip().decode('utf-8')
             addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+            agency_id = msg.split(" ")[1].strip("]")
+            bet_info = msg.split(" ")[3].split(",")
+            #logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+            client_bet = Bet(agency_id, bet_info[1], bet_info[2], bet_info[3], bet_info[4], bet_info[0])
+            bets.append(client_bet)
+            logging.info(f'action: apuesta_almacenada | result: success | dni: {msg[7]} | numero: {msg[5]}')
             # TODO: Modify the send to avoid short-writes
-            client_sock.send("{}\n".format(msg).encode('utf-8'))
+            msg = "{}\n".format(msg).encode('utf-8')
+            sent = 0
+            while len(msg) != sent:
+                bytes_sent = client_sock.send(msg[sent:])
+                if bytes_sent == 0:
+                    break
+                sent += bytes_sent
         except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
+            #logging.error("action: receive_message | result: fail | error: {e}")
+            logging.error("action: apuesta_almacenada | result: fail | error: {e}")
         finally:
             client_sock.close()
 
