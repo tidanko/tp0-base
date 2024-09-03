@@ -44,10 +44,12 @@ class Server:
         """
         try:
             # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024)
+            msg = client_sock.recv(1024).decode('utf-8')
+            print(msg)
             if msg[-1] != '\n':
+                print("holis")
                 raise OSError
-            msg = msg.rstrip().decode('utf-8')
+            msg = msg.rstrip()
             addr = client_sock.getpeername()
             agency_id = msg.split(" ")[1].strip("]")
             bet_info = msg.split(" ")[3].split(",")
