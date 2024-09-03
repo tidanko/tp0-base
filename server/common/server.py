@@ -42,9 +42,9 @@ class Server:
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
+        bets_amount = 0
         try:
             # TODO: Modify the receive to avoid short-reads
-            bets_amount = 0
             while True:
                 msg = client_sock.recv(1024).decode('utf-8')
                 if msg[-1] != '\n':
@@ -76,6 +76,7 @@ class Server:
         except OSError as e:
             logging.error("action: receive_message | result: fail | error: {e}")
             logging.error("action: apuesta_almacenada | result: fail | error: {e}")
+            logging.info(f'action: apuesta_recibida | result: success | cantidad: ${bets_amount}')
         finally:
             client_sock.close()
 
