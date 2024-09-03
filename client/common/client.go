@@ -2,12 +2,14 @@ package common
 
 import (
 	"bufio"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"net"
-	"time"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/op/go-logging"
 )
@@ -16,17 +18,18 @@ var log = logging.MustGetLogger("log")
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
-	ID            string
-	ServerAddress string
-	LoopAmount    int
-	LoopPeriod    time.Duration
+	ID             string
+	ServerAddress  string
+	LoopAmount     int
+	LoopPeriod     time.Duration
+	MaxAmountBatch int
 }
 
 // Client Entity that encapsulates how
 type Client struct {
 	config ClientConfig
 	conn   net.Conn
-	down bool
+	down   bool
 }
 
 // NewClient Initializes a new client receiving the configuration
@@ -74,7 +77,18 @@ func (c *Client) StartClientLoop() {
 		}
 	} ()
 
+	bets_file, err := os.Open(fmt.Sprintf("./.data/agency-%v.csv", c.config.ID))
+	if err != nil {
+		log.Errorf("action: open_bets_file | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+		return
+	}
+	defer bets_file.Close()
 
+	reader := csv.NewReader(bets_file)
+	line_number := 0 
 
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
 		if c.down {
@@ -86,29 +100,65 @@ func (c *Client) StartClientLoop() {
 
 		// TODO: Modify the send to avoid short-write
 		
-		msg_to_send := fmt.Sprintf(
-			"[AGENCY %v] Bet %v,%v,%v,%v,%v\n",
-			c.config.ID,
-			os.Getenv("NUMERO"),
-			os.Getenv("NOMBRE"),
-			os.Getenv("APELLIDO"),
-			os.Getenv("DOCUMENTO"),
-			os.Getenv("NACIMIENTO"),
-		)
-		sent := 0
-
 		for {
-			bytes_sent, _ := fmt.Fprintf(
-				c.conn,
-				msg_to_send,
-			)
-
-			sent += bytes_sent
-			if sent == len(msg_to_send) {
+			if line_number == c.config.MaxAmountBatch {
+				line_number = 0
+				msg_to_send := fmt.Sprintf(
+					"[AGENCY %v] BetBatchEnd\n",
+					c.config.ID,
+				)
+				sent := 0
+		
+				for {
+					bytes_sent, _ := fmt.Fprintf(
+						c.conn,
+						msg_to_send,
+					)
+		
+					sent += bytes_sent
+					if sent == len(msg_to_send) {
+						break
+					}
+				}
 				break
 			}
-		}
+			data, err := reader.Read()
+			if err == io.EOF {
+				c.down = true
+				break
+			}
+			if err != nil {
+				log.Errorf("action: read_bets_file | result: fail | client_id: %v | error: %v",
+					c.config.ID,
+					err,
+				)
+				return
+			}
 
+			msg_to_send := fmt.Sprintf(
+				"[AGENCY %v] Bet %v,%v,%v,%v,%v\n",
+				c.config.ID,
+				data[4],
+				data[0],
+				data[1],
+				data[2],
+				data[3],
+			)
+			sent := 0
+	
+			for {
+				bytes_sent, _ := fmt.Fprintf(
+					c.conn,
+					msg_to_send,
+				)
+	
+				sent += bytes_sent
+				if sent == len(msg_to_send) {
+					break
+				}
+			}
+			line_number += 1
+		}
 
 		reader := bufio.NewReader(c.conn)
 		var msg string
@@ -137,7 +187,7 @@ func (c *Client) StartClientLoop() {
 
 		c.conn.Close()
 
-		if msg_to_send != msg {
+		if msg != "BetBatchEnd\n" {
 			log.Errorf("action: receive_message | result: fail | client_id: %v",
 				c.config.ID,
 			)

@@ -44,29 +44,35 @@ class Server:
         """
         try:
             # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).decode('utf-8')
-            print(msg)
-            if msg[-1] != '\n':
-                print("holis")
-                raise OSError
-            msg = msg.rstrip()
-            addr = client_sock.getpeername()
-            agency_id = msg.split(" ")[1].strip("]")
-            bet_info = msg.split(" ")[3].split(",")
-            if len(bet_info) < 5:
-                raise OSError
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-            client_bet = Bet(agency_id, bet_info[1], bet_info[2], bet_info[3], bet_info[4], bet_info[0])
-            store_bets([client_bet])
-            logging.info(f'action: apuesta_almacenada | result: success | dni: {msg[7]} | numero: {msg[5]}')
-            # TODO: Modify the send to avoid short-writes
-            msg = "{}\n".format(msg).encode('utf-8')
-            sent = 0
-            while len(msg) != sent:
-                bytes_sent = client_sock.send(msg[sent:])
-                if bytes_sent == 0:
+            bets_amount = 0
+            while True:
+                msg = client_sock.recv(1024).decode('utf-8')
+                if msg[-1] != '\n':
+                    raise OSError
+                msg = msg.rstrip()
+                if msg.split()[1] != 'BetBatchEnd':
+                    logging.info(f'action: apuesta_recibida | result: success | cantidad: ${bets_amount}')
+                    # TODO: Modify the send to avoid short-writes
+                    msg = "{}\n".format(msg).encode('utf-8')
+                    sent = 0
+                    while len(msg) != sent:
+                        bytes_sent = client_sock.send(msg[sent:])
+                        if bytes_sent == 0:
+                            break
+                        sent += bytes_sent
                     break
-                sent += bytes_sent
+    
+                addr = client_sock.getpeername()
+                agency_id = msg.split(" ")[1].strip("]")
+                bet_info = msg.split(" ")[3].split(",")
+                if len(bet_info) < 5:
+                    raise OSError
+                logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+                client_bet = Bet(agency_id, bet_info[1], bet_info[2], bet_info[3], bet_info[4], bet_info[0])
+                bets_amount += 1                         
+                store_bets([client_bet])
+                logging.info(f'action: apuesta_almacenada | result: success | dni: {msg[7]} | numero: {msg[5]}')
+
         except OSError as e:
             logging.error("action: receive_message | result: fail | error: {e}")
             logging.error("action: apuesta_almacenada | result: fail | error: {e}")
