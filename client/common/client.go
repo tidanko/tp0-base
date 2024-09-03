@@ -115,10 +115,10 @@ func (c *Client) StartClientLoop() {
 			msg += line
 	
 			if err != nil {
-				//log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-				//	c.config.ID,
-				//	err,
-				//)
+				log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+					c.config.ID,
+					err,
+				)
 	
 				log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v",
 					os.Getenv("DOCUMENTO"),
@@ -134,10 +134,23 @@ func (c *Client) StartClientLoop() {
 
 		c.conn.Close()
 
-		//log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-		//	c.config.ID,
-		//	msg,
-		//)
+		if msg_to_send != msg {
+			log.Errorf("action: receive_message | result: fail | client_id: %v",
+				c.config.ID,
+			)
+
+			log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v",
+				os.Getenv("DOCUMENTO"),
+				os.Getenv("NUMERO"),
+			)
+			return
+		}
+
+
+		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
+			c.config.ID,
+			msg,
+		)
 
 		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
 			os.Getenv("DOCUMENTO"),

@@ -25,18 +25,17 @@ class Server:
         # TODO: Modify this program to handle signal to graceful shutdown
         # the server
 
-        bets = []
         signal.signal(signal.SIGTERM, self.__handle_sigterm)
 
         while not self.down:
             client_sock = self.__accept_new_connection()
             if self.down:
                 return
-            self.__handle_client_connection(client_sock, bets)
+            self.__handle_client_connection(client_sock)
 
-        store_bets(bets)
+   
 
-    def __handle_client_connection(self, client_sock, bets):
+    def __handle_client_connection(self, client_sock):
         """
         Read message from a specific client socket and closes the socket
 
@@ -52,9 +51,11 @@ class Server:
             addr = client_sock.getpeername()
             agency_id = msg.split(" ")[1].strip("]")
             bet_info = msg.split(" ")[3].split(",")
-            #logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+            if len(bet_info) < 5:
+                raise OSError
+            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
             client_bet = Bet(agency_id, bet_info[1], bet_info[2], bet_info[3], bet_info[4], bet_info[0])
-            bets.append(client_bet)
+            store_bets([client_bet])
             logging.info(f'action: apuesta_almacenada | result: success | dni: {msg[7]} | numero: {msg[5]}')
             # TODO: Modify the send to avoid short-writes
             msg = "{}\n".format(msg).encode('utf-8')
@@ -65,7 +66,7 @@ class Server:
                     break
                 sent += bytes_sent
         except OSError as e:
-            #logging.error("action: receive_message | result: fail | error: {e}")
+            logging.error("action: receive_message | result: fail | error: {e}")
             logging.error("action: apuesta_almacenada | result: fail | error: {e}")
         finally:
             client_sock.close()
