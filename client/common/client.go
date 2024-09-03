@@ -83,41 +83,34 @@ func (c *Client) StartClientLoop() {
 
 		// TODO: Modify the send to avoid short-write
 		
-		msg := fmt.Sprintf(
+		msg_to_send := fmt.Sprintf(
 			"[AGENCY %v] Bet %v,%v,%v,%v,%v\n",
 			c.config.ID,
-			os.getenv("NUMERO"),
-			os.getenv("NOMBRE"),
-			os.getenv("APELLIDO"),
-			os.getenv("DOCUMENTO"),
-			os.getenv("NACIMIENTO"),
+			os.Getenv("NUMERO"),
+			os.Getenv("NOMBRE"),
+			os.Getenv("APELLIDO"),
+			os.Getenv("DOCUMENTO"),
+			os.Getenv("NACIMIENTO"),
 		)
 		sent := 0
 
-		for true {
+		for {
 			bytes_sent, _ := fmt.Fprintf(
 				c.conn,
-				"[AGENCY %v] Bet %v,%v,%v,%v,%v\n",
-				c.config.ID,
-				os.getenv("NUMERO"),
-				os.getenv("NOMBRE"),
-				os.getenv("APELLIDO"),
-				os.getenv("DOCUMENTO"),
-				os.getenv("NACIMIENTO"),
+				msg_to_send,
 			)
 
 			sent += bytes_sent
-			if sent == len(msg) {
+			if sent == len(msg_to_send) {
 				break
 			}
 		}
 
 
-
-		reader := bufio.NewReader(conn)
+		reader := bufio.NewReader(c.conn)
 		var msg string
 	
-		for true {
+		for {
 			line, err := reader.ReadString('\n')
 			msg += line
 	
@@ -128,8 +121,8 @@ func (c *Client) StartClientLoop() {
 				//)
 	
 				log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v",
-					os.getenv("DOCUMENTO"),
-					os.getenv("NUMERO"),
+					os.Getenv("DOCUMENTO"),
+					os.Getenv("NUMERO"),
 				)
 				return
 			}
@@ -147,8 +140,8 @@ func (c *Client) StartClientLoop() {
 		//)
 
 		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
-			os.getenv("DOCUMENTO"),
-			os.getenv("NUMERO"),
+			os.Getenv("DOCUMENTO"),
+			os.Getenv("NUMERO"),
 		)
 
 		// Wait a time between sending one message and the next one
