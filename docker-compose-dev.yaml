@@ -5,8 +5,8 @@ services:
     image: server:latest
     entrypoint: python3 /main.py
     environment:
-      - PYTHONUNBUFFERED=1
-      - LOGGING_LEVEL=DEBUG
+    - PYTHONUNBUFFERED=1
+    - LOGGING_LEVEL=DEBUG
     networks:
       - testing_net
     volumes:
@@ -31,4 +31,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 172.25.125.0/24
+      - subnet: 172.25.125.0/24
