@@ -18,6 +18,7 @@ def main():
                 'entrypoint': 'python3 /main.py',
                 'environment': ['PYTHONUNBUFFERED=1', 'LOGGING_LEVEL=DEBUG'],
                 'networks': ['testing_net'],
+                'volumes': ['./server/config.ini:/config.ini'],
             }    
         },
         'networks': {
@@ -28,8 +29,7 @@ def main():
                 }
             }
         },
-        'volumes': ['./server/config.ini:/config.ini'],
-        }
+    }
 
     for i in range(1, clients_amount + 1):
         new_client = {
