@@ -2,7 +2,7 @@ import yaml
 import sys
 
 def main():
-    if len(sys.argv) != 3 or not sys.argv[2].isnumeric() or int(sys.argv[2]) < 1 or len(sys.argv[1]) < 6 or sys.argv[1][len(sys.argv[1]) - 5:] != '.yaml':
+    if len(sys.argv) != 3 or not sys.argv[2].isnumeric() or int(sys.argv[2]) < 0 or len(sys.argv[1]) < 6 or sys.argv[1][len(sys.argv[1]) - 5:] != '.yaml':
         raise ValueError("The parameters introduced are incorrect. Use: ./generar-compose.sh <file-name> <clients_amount>")
 
 
