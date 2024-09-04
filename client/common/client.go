@@ -8,8 +8,10 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
+	"errors"
 
 	"github.com/op/go-logging"
 )
@@ -87,7 +89,7 @@ func (c *Client) StartClientLoop() {
 	}
 	defer bets_file.Close()
 
-	reader := csv.NewReader(bets_file)
+	csv_reader := csv.NewReader(bets_file)
 	line_number := 0 
 
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
@@ -122,7 +124,7 @@ func (c *Client) StartClientLoop() {
 				}
 				break
 			}
-			data, err := reader.Read()
+			data, err := csv_reader.Read()
 			if err == io.EOF {
 				c.down = true
 				break
@@ -214,6 +216,48 @@ func (c *Client) StartClientLoop() {
 		time.Sleep(c.config.LoopPeriod)
 
 	}
+
+	c.createClientSocket()
+
+	msg_to_send := fmt.Sprintf(
+		"[AGENCY %v] ReadyForLottery\n",
+		c.config.ID,
+	)
+	sent := 0
+
+	for {
+		bytes_sent, _ := fmt.Fprintf(
+			c.conn,
+			msg_to_send,
+		)
+
+		sent += bytes_sent
+		if sent == len(msg_to_send) {
+			break
+		}
+	}
+
+	for {
+		c.conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		msg, err := bufio.NewReader(c.conn).ReadString('\n')
+
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			continue
+		}
+		if err != nil {
+			log.Errorf("action: consulta_ganadores | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
+			return
+		}
+
+		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %v", strings.Split(strings.Trim(msg, "\n"), " ")[1])
+		break
+	}
+
+	c.conn.Close()
+
 	if !c.down {
 		log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 	}

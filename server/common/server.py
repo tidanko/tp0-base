@@ -2,7 +2,7 @@ import socket
 import logging
 import signal
 import sys
-from common.utils import Bet, store_bets
+from common.utils import Bet, store_bets, load_bets, has_won
 
 
 class Server:
@@ -11,6 +11,8 @@ class Server:
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
+        self.clients_finished = 0
+        self.clients_sockets = {}
         self.down = False
 
     def run(self):
@@ -50,7 +52,27 @@ class Server:
                 if msg[-1] != '\n':
                     raise OSError
                 msg = msg.rstrip()
-                if msg.split()[1] != 'BetBatchEnd':
+                if msg.split()[1] == 'ReadyForLottery':
+                    self.clients_finished += 1
+                    self.clients_sockets[msg.split()[1]] = client_sock
+                    if self.clients_finished == 5:
+                        logging.info('action: sorteo | result: success')
+                        bets = load_bets()
+                        amount_winners_by_agency = {}
+                        for bet in bets:
+                            if has_won(bet):
+                                amount_winners_by_agency[bet.agency] = amount_winners_by_agency.get(bet.agency, 0) + 1
+                        for agency in self.clients_sockets:
+                            msg = "Winners {}\n".format(amount_winners_by_agency[agency]).encode('utf-8')
+                            sent = 0
+                            while len(msg) != sent:
+                                bytes_sent = self.clients_sockets[agency].send(msg[sent:])
+                                if bytes_sent == 0:
+                                    raise OSError
+                                sent += bytes_sent
+                        break
+                    return
+                if msg.split()[1] == 'BetBatchEnd':
                     logging.info(f'action: apuesta_recibida | result: success | cantidad: ${bets_amount}')
                     # TODO: Modify the send to avoid short-writes
                     msg = "{}\n".format(msg).encode('utf-8')
