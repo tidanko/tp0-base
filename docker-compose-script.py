@@ -39,7 +39,7 @@ def main():
             'environment': [f'CLI_ID={i}', 'CLI_LOG_LEVEL=DEBUG'],
             'networks': ['testing_net'],
             'depends_on': ['server'],
-            'volumes': ['./client/config.yaml:/config.yaml']
+            'volumes': ['./client/config.yaml:/config.yaml', './.data:/.data']
         }
         data['services'][f'client{i}'] = new_client
     

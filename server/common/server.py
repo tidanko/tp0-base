@@ -45,22 +45,24 @@ class Server:
         bets_amount = 0
         try:
             bets_list = []
-            while True:
-                msg = self.__read_message(client_sock)
-                if msg.split()[1] != 'BetBatchEnd':
-                    store_bets(bets_list)
-                    logging.info(f'action: apuesta_recibida | result: success | cantidad: ${bets_amount}')
-                    self.__send_message(client_sock, msg)
-                    break
-                addr = client_sock.getpeername()
-                agency_id = msg.split(" ")[1].strip("]")
-                bet_info = msg.split(" ")[3].split(",")
-                if len(bet_info) < 5:
-                    raise OSError
-                logging.debug(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-                bets_list.append(Bet(agency_id, bet_info[1], bet_info[2], bet_info[3], bet_info[4], bet_info[0]))
-                bets_amount += 1                         
-                logging.info(f'action: apuesta_almacenada | result: success | dni: {msg[7]} | numero: {msg[5]}')
+            keep_going = True
+            while keep_going:
+                for msg in self.__read_message(client_sock):
+                    if msg.split()[2] == 'BetBatchEnd':
+                        store_bets(bets_list)
+                        logging.info(f'action: apuesta_recibida | result: success | cantidad: {bets_amount}')
+                        self.__send_message(client_sock, msg)
+                        keep_going = False
+                        break
+                    addr = client_sock.getpeername()
+                    agency_id = msg.split(" ")[1].strip("]")
+                    bet_info = " ".join(msg.split(" ")[3:]).split(",")
+                    if len(bet_info) < 5:
+                        raise OSError
+                    logging.debug(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+                    bets_list.append(Bet(agency_id, bet_info[1], bet_info[2], bet_info[3], bet_info[4], bet_info[0]))
+                    bets_amount += 1                         
+                    logging.debug(f'action: apuesta_almacenada | result: success | dni: {bet_info[3]} | numero: {bet_info[0]}')
 
         except OSError as e:
             logging.error(f'action: apuesta_recibida | result: fail | error: {e}')
@@ -74,7 +76,7 @@ class Server:
             if received == '':
                 raise OSError
             msg += received
-        return msg.rstrip()
+        return msg.rstrip().split('\n')
 
     def __send_message(self, client_sock, msg):
         msg = "{}\n".format(msg).encode('utf-8')

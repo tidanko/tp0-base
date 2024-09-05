@@ -39,11 +39,6 @@ func NewClient(config ClientConfig) *Client {
 		config: config,
 		down: false,
 	}
-	os.Setenv("NUMERO", "1111")
-	os.Setenv("NOMBRE", "Sergio")
-	os.Setenv("APELLIDO", "CHouza")
-	os.Setenv("DOCUMENTO", "41567345")
-	os.Setenv("NACIMIENTO", "1999-06-20")
 	return client
 }
 
@@ -148,6 +143,11 @@ func (c *Client) StartClientLoop() {
 				return
 			}
 
+			log.Debugf("action: apuesta_enviada | result: success | dni: %v | numero: %v",
+				data[2],
+				data[4],
+			)
+
 			line_number += 1
 		}
 
@@ -160,21 +160,14 @@ func (c *Client) StartClientLoop() {
 		c.conn.Close()
 
 		if msg != msg_to_send {
-			log.Errorf("action: receive_message | result: fail | client_id: %v",
-				c.config.ID,
-			)
-
-			log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v",
-				os.Getenv("DOCUMENTO"),
-				os.Getenv("NUMERO"),
+			log.Errorf("action: apuesta_enviada | result: fail | error: %v",
 				"Incorrect message received from server.",
 			)
 			return
 		}
 
-		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
-			os.Getenv("DOCUMENTO"),
-			os.Getenv("NUMERO"),
+		log.Infof("action: apuesta_enviada | result: success | cantidad: %v",
+			line_number,
 		)
 
 		// Wait a time between sending one message and the next one
