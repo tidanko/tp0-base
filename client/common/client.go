@@ -39,6 +39,11 @@ func NewClient(config ClientConfig) *Client {
 		config: config,
 		down: false,
 	}
+	os.Setenv("NUMERO", "1111")
+	os.Setenv("NOMBRE", "Sergio")
+	os.Setenv("APELLIDO", "CHouza")
+	os.Setenv("DOCUMENTO", "41567345")
+	os.Setenv("NACIMIENTO", "1999-06-20")
 	return client
 }
 
@@ -88,45 +93,39 @@ func (c *Client) StartClientLoop() {
 	defer bets_file.Close()
 
 	reader := csv.NewReader(bets_file)
-	line_number := 0 
 
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
 		if c.down {
 			return
 		}
 
+		line_number := 0 
+
 		// Create the connection the server in every loop iteration. Send an
 		c.createClientSocket()
-
-		// TODO: Modify the send to avoid short-write
 		
+		var msg_to_send string
+
 		for {
 			if line_number == c.config.MaxAmountBatch {
-				line_number = 0
-				msg_to_send := fmt.Sprintf(
+				msg_to_send, err = sendMessage(c.conn, fmt.Sprintf(
 					"[AGENCY %v] BetBatchEnd\n",
 					c.config.ID,
-				)
-				sent := 0
-		
-				for {
-					bytes_sent, _ := fmt.Fprintf(
-						c.conn,
-						msg_to_send,
-					)
-		
-					sent += bytes_sent
-					if sent == len(msg_to_send) {
-						break
-					}
+				))
+
+				if err != nil {
+					return
 				}
+
 				break
 			}
+
 			data, err := reader.Read()
 			if err == io.EOF {
-				c.down = true
-				break
+				line_number = c.config.MaxAmountBatch
+				continue
 			}
+
 			if err != nil {
 				log.Errorf("action: read_bets_file | result: fail | client_id: %v | error: %v",
 					c.config.ID,
@@ -135,7 +134,7 @@ func (c *Client) StartClientLoop() {
 				return
 			}
 
-			msg_to_send := fmt.Sprintf(
+			msg_to_send, err := sendMessage(c.conn, fmt.Sprintf(
 				"[AGENCY %v] Bet %v,%v,%v,%v,%v\n",
 				c.config.ID,
 				data[4],
@@ -143,51 +142,24 @@ func (c *Client) StartClientLoop() {
 				data[1],
 				data[2],
 				data[3],
-			)
-			sent := 0
-	
-			for {
-				bytes_sent, _ := fmt.Fprintf(
-					c.conn,
-					msg_to_send,
-				)
-	
-				sent += bytes_sent
-				if sent == len(msg_to_send) {
-					break
-				}
+			))
+
+			if msg_to_send == "" || err != nil {
+				return
 			}
+
 			line_number += 1
 		}
 
-		reader := bufio.NewReader(c.conn)
-		var msg string
-	
-		for {
-			line, err := reader.ReadString('\n')
-			msg += line
-	
-			if err != nil {
-				log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-					c.config.ID,
-					err,
-				)
-	
-				log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v",
-					os.Getenv("DOCUMENTO"),
-					os.Getenv("NUMERO"),
-				)
-				return
-			}
-	
-			if len(line) > 0 && line[len(line)-1] == '\n' {
-				break
-			}
+		msg, err := receiveMessage(c.conn)
+
+		if err != nil {
+			return
 		}
 
 		c.conn.Close()
 
-		if msg != "BetBatchEnd\n" {
+		if msg != msg_to_send {
 			log.Errorf("action: receive_message | result: fail | client_id: %v",
 				c.config.ID,
 			)
@@ -195,15 +167,10 @@ func (c *Client) StartClientLoop() {
 			log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v",
 				os.Getenv("DOCUMENTO"),
 				os.Getenv("NUMERO"),
+				"Incorrect message received from server.",
 			)
 			return
 		}
-
-
-		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-			c.config.ID,
-			msg,
-		)
 
 		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
 			os.Getenv("DOCUMENTO"),
@@ -217,4 +184,54 @@ func (c *Client) StartClientLoop() {
 	if !c.down {
 		log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 	}
+}
+
+func receiveMessage(conn net.Conn) (string, error){
+	reader := bufio.NewReader(conn)
+	var msg string
+
+	for {
+		line, err := reader.ReadString('\n')
+		msg += line
+
+		if err != nil {
+			log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v | error: %v",
+				os.Getenv("DOCUMENTO"),
+				os.Getenv("NUMERO"),
+				err,
+			)
+			return msg, err
+		}
+
+		if len(line) > 0 && line[len(line)-1] == '\n' {
+			return msg, err
+		}
+	}
+}
+
+func sendMessage(conn net.Conn, msg string) (string, error){
+	sent := 0
+
+	for {
+		bytes_sent, err := fmt.Fprint(
+			conn,
+			msg,
+		)
+
+		if err != nil {
+			log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v | error: %v",
+				os.Getenv("DOCUMENTO"),
+				os.Getenv("NUMERO"),
+				err,
+			)
+			return msg, err
+		}
+
+		sent += bytes_sent
+		if sent == len(msg) {
+			break
+		}
+	}
+
+	return msg, nil
 }
