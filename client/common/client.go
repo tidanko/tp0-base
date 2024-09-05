@@ -173,8 +173,6 @@ func (c *Client) StartClientLoop() {
 
 	}
 
-	log.Infof("REady for lottery")
-
 	msg_to_send, err := sendMessage(c.conn, fmt.Sprintf(
 		"[AGENCY %v] ReadyForLottery\n",
 		c.config.ID,
