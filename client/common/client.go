@@ -88,12 +88,13 @@ func (c *Client) StartClientLoop() {
 	defer bets_file.Close()
 
 	reader := csv.NewReader(bets_file)
+	eof := false
 
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
 		if c.down {
 			return
 		}
-
+	
 		line_number := 0 
 
 		// Create the connection the server in every loop iteration. Send an
@@ -102,7 +103,7 @@ func (c *Client) StartClientLoop() {
 		var msg_to_send string
 
 		for {
-			if line_number == c.config.MaxAmountBatch {
+			if line_number == c.config.MaxAmountBatch || eof {
 				msg_to_send, err = sendMessage(c.conn, fmt.Sprintf(
 					"[AGENCY %v] BetBatchEnd\n",
 					c.config.ID,
@@ -117,7 +118,7 @@ func (c *Client) StartClientLoop() {
 
 			data, err := reader.Read()
 			if err == io.EOF {
-				line_number = c.config.MaxAmountBatch
+				eof = true
 				continue
 			}
 
@@ -172,6 +173,10 @@ func (c *Client) StartClientLoop() {
 
 		// Wait a time between sending one message and the next one
 		time.Sleep(c.config.LoopPeriod)
+
+		if eof {
+			break
+		}
 
 	}
 	if !c.down {
