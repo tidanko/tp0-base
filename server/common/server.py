@@ -2,6 +2,7 @@ import socket
 import logging
 import signal
 import sys
+from multiprocessing import Process, Lock, Barrier
 from common.utils import Bet, store_bets, load_bets, has_won
 
 NUMBER_AGENCIES = 5
@@ -12,8 +13,8 @@ class Server:
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
-        self.clients_finished = 0
-        self.clients_sockets = {}
+        self.file_lock = Lock()
+        self.barrier = Barrier(NUMBER_AGENCIES)
         self.down = False
 
     def run(self):
@@ -25,18 +26,20 @@ class Server:
         finishes, servers starts to accept new connections again
         """
 
-        # TODO: Modify this program to handle signal to graceful shutdown
-        # the server
-
         signal.signal(signal.SIGTERM, self.__handle_sigterm)
 
+        processes = []
         while not self.down:
             client_sock = self.__accept_new_connection()
             if self.down:
                 return
-            self.__handle_client_connection(client_sock)
+            p = Process(target=self.__handle_client_connection, args=(client_sock,))
+            processes.append(p)
+            p.start()
 
-   
+        for p in processes:
+            p.join()
+
 
     def __handle_client_connection(self, client_sock):
         """
@@ -45,21 +48,25 @@ class Server:
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
-        bets_amount = 0
         try:
+            agency_id = ""
             bets_list = []
-            keep_going = True
-            while keep_going:
+            bets_amount = 0
+            while True:
                 for msg in self.__read_message(client_sock):
                     if msg.split()[2] == 'ReadyForLottery':
-                        self.__manage_ready_for_lottery(client_sock, msg)
+                        self.barrier.wait()
+                        self.__send_lottery_results(client_sock, agency_id)
                         return
                     if msg.split()[2] == 'BetBatchEnd':
+                        self.file_lock.acquire()
                         store_bets(bets_list)
+                        self.file_lock.release()
                         logging.info(f'action: apuesta_recibida | result: success | cantidad: {bets_amount}')
                         self.__send_message(client_sock, msg)
-                        keep_going = False
-                        break
+                        bets_list = []
+                        bets_amount = 0
+                        continue
                     addr = client_sock.getpeername()
                     agency_id = msg.split(" ")[1].strip("]")
                     bet_info = " ".join(msg.split(" ")[3:]).split(",")
@@ -70,28 +77,19 @@ class Server:
                     bets_amount += 1                         
                     logging.debug(f'action: apuesta_almacenada | result: success | dni: {bet_info[3]} | numero: {bet_info[0]}')
 
-            client_sock.close()
-
         except OSError as e:
             logging.error(f'action: mensaje_enviado | result: fail | error: {e}')
 
-
-    def __manage_ready_for_lottery(self, client_sock, msg):
-        self.clients_finished += 1
-        self.clients_sockets[msg.split(" ")[1].strip("]")] = client_sock
-        if self.clients_finished == NUMBER_AGENCIES:
-            logging.info('action: sorteo | result: success')
-            self.__send_lottery_results()
-
-    def __send_lottery_results(self):
+    def __send_lottery_results(self, client_sock, agency_id):
+        self.file_lock.acquire()
         bets = load_bets()
-        amount_winners_by_agency = {}
+        self.file_lock.release()
+        amount_winners_agency = 0
         for bet in bets:
-            if has_won(bet):
-                amount_winners_by_agency[bet.agency] = amount_winners_by_agency.get(bet.agency, 0) + 1
-        for agency in self.clients_sockets:
-            self.__send_message(self.clients_sockets[agency], f"Winners {amount_winners_by_agency[int(agency)] if int(agency) in amount_winners_by_agency else 0}")
-            self.clients_sockets[agency].close()       
+            if bet.agency == int(agency_id) and has_won(bet):
+                amount_winners_by_agency += 1
+        self.__send_message(client_sock, f"Winners {amount_winners_agency}")
+        client_sock.close()     
 
     def __read_message(self, client_sock):
         msg = ''

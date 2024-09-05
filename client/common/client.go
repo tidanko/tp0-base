@@ -90,6 +90,7 @@ func (c *Client) StartClientLoop() {
 	defer bets_file.Close()
 
 	reader := csv.NewReader(bets_file)
+	c.createClientSocket()
 
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
 		if c.down {
@@ -97,9 +98,6 @@ func (c *Client) StartClientLoop() {
 		}
 
 		line_number := 0 
-
-		// Create the connection the server in every loop iteration. Send an
-		c.createClientSocket()
 		
 		var msg_to_send string
 
@@ -159,8 +157,6 @@ func (c *Client) StartClientLoop() {
 			return
 		}
 
-		c.conn.Close()
-
 		if msg != msg_to_send {
 			log.Errorf("action: apuesta_enviada | result: fail | error: %v",
 				"Incorrect message received from server.",
@@ -177,7 +173,7 @@ func (c *Client) StartClientLoop() {
 
 	}
 
-	c.createClientSocket()
+	log.Infof("REady for lottery")
 
 	msg_to_send, err := sendMessage(c.conn, fmt.Sprintf(
 		"[AGENCY %v] ReadyForLottery\n",
@@ -227,6 +223,10 @@ func receiveMessage(conn net.Conn) (string, error){
 		msg += line
 
 		if err != nil {
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				return msg, err
+			}
+
 			log.Errorf("action: mensaje_enviado | result: fail | dni: %v | numero: %v | error: %v",
 				os.Getenv("DOCUMENTO"),
 				os.Getenv("NUMERO"),
