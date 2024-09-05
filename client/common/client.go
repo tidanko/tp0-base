@@ -36,6 +36,11 @@ func NewClient(config ClientConfig) *Client {
 		config: config,
 		down: false,
 	}
+	os.Setenv("NUMERO", "1111")
+	os.Setenv("NOMBRE", "Sergio")
+	os.Setenv("APELLIDO", "CHouza")
+	os.Setenv("DOCUMENTO", "41567345")
+	os.Setenv("NACIMIENTO", "1999-06-20")
 	return client
 }
 
@@ -74,8 +79,6 @@ func (c *Client) StartClientLoop() {
 		}
 	} ()
 
-
-
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
 		if c.down {
 			return
@@ -83,10 +86,8 @@ func (c *Client) StartClientLoop() {
 
 		// Create the connection the server in every loop iteration. Send an
 		c.createClientSocket()
-
-		// TODO: Modify the send to avoid short-write
 		
-		msg_to_send := fmt.Sprintf(
+		msg_to_send, err := sendMessage(c.conn, fmt.Sprintf(
 			"[AGENCY %v] Bet %v,%v,%v,%v,%v\n",
 			c.config.ID,
 			os.Getenv("NUMERO"),
@@ -94,66 +95,28 @@ func (c *Client) StartClientLoop() {
 			os.Getenv("APELLIDO"),
 			os.Getenv("DOCUMENTO"),
 			os.Getenv("NACIMIENTO"),
-		)
-		sent := 0
+		))
 
-		for {
-			bytes_sent, _ := fmt.Fprintf(
-				c.conn,
-				msg_to_send,
-			)
-
-			sent += bytes_sent
-			if sent == len(msg_to_send) {
-				break
-			}
+		if err != nil {
+			return
 		}
 
+		msg, err := receiveMessage(c.conn)
 
-		reader := bufio.NewReader(c.conn)
-		var msg string
-	
-		for {
-			line, err := reader.ReadString('\n')
-			msg += line
-	
-			if err != nil {
-				log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-					c.config.ID,
-					err,
-				)
-	
-				log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v",
-					os.Getenv("DOCUMENTO"),
-					os.Getenv("NUMERO"),
-				)
-				return
-			}
-	
-			if len(line) > 0 && line[len(line)-1] == '\n' {
-				break
-			}
+		if err != nil {
+			return
 		}
 
 		c.conn.Close()
 
 		if msg_to_send != msg {
-			log.Errorf("action: receive_message | result: fail | client_id: %v",
-				c.config.ID,
-			)
-
-			log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v",
+			log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v | error: %v",
 				os.Getenv("DOCUMENTO"),
 				os.Getenv("NUMERO"),
+				"Incorrect message received from server.",
 			)
 			return
 		}
-
-
-		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-			c.config.ID,
-			msg,
-		)
 
 		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
 			os.Getenv("DOCUMENTO"),
@@ -167,4 +130,54 @@ func (c *Client) StartClientLoop() {
 	if !c.down {
 		log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 	}
+}
+
+func receiveMessage(conn net.Conn) (string, error){
+	reader := bufio.NewReader(conn)
+	var msg string
+
+	for {
+		line, err := reader.ReadString('\n')
+		msg += line
+
+		if err != nil {
+			log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v | error: %v",
+				os.Getenv("DOCUMENTO"),
+				os.Getenv("NUMERO"),
+				err,
+			)
+			return msg, err
+		}
+
+		if len(line) > 0 && line[len(line)-1] == '\n' {
+			return msg, err
+		}
+	}
+}
+
+func sendMessage(conn net.Conn, msg string) (string, error){
+	sent := 0
+
+	for {
+		bytes_sent, err := fmt.Fprint(
+			conn,
+			msg,
+		)
+
+		if err != nil {
+			log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v | error: %v",
+				os.Getenv("DOCUMENTO"),
+				os.Getenv("NUMERO"),
+				err,
+			)
+			return msg, err
+		}
+
+		sent += bytes_sent
+		if sent == len(msg) {
+			break
+		}
+	}
+
+	return msg, nil
 }

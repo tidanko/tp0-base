@@ -43,35 +43,36 @@ class Server:
         client socket will also be closed
         """
         try:
-            # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).decode('utf-8')
-            print(msg)
-            if msg[-1] != '\n':
-                print("holis")
-                raise OSError
-            msg = msg.rstrip()
-            addr = client_sock.getpeername()
+            msg = self.__read_message(client_sock)
             agency_id = msg.split(" ")[1].strip("]")
             bet_info = msg.split(" ")[3].split(",")
             if len(bet_info) < 5:
                 raise OSError
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-            client_bet = Bet(agency_id, bet_info[1], bet_info[2], bet_info[3], bet_info[4], bet_info[0])
-            store_bets([client_bet])
+            store_bets([Bet(agency_id, bet_info[1], bet_info[2], bet_info[3], bet_info[4], bet_info[0])])
             logging.info(f'action: apuesta_almacenada | result: success | dni: {msg[7]} | numero: {msg[5]}')
-            # TODO: Modify the send to avoid short-writes
-            msg = "{}\n".format(msg).encode('utf-8')
-            sent = 0
-            while len(msg) != sent:
-                bytes_sent = client_sock.send(msg[sent:])
-                if bytes_sent == 0:
-                    break
-                sent += bytes_sent
+            self.__send_message(client_sock, msg)
         except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
             logging.error("action: apuesta_almacenada | result: fail | error: {e}")
         finally:
             client_sock.close()
+
+    def __read_message(self, client_sock):
+        msg = ''
+        while msg == '' or msg[-1] != '\n':
+            received = client_sock.recv(1024).decode('utf-8')
+            if received == '':
+                raise OSError
+            msg += received
+        return msg.rstrip()
+
+    def __send_message(self, client_sock, msg):
+        msg = "{}\n".format(msg).encode('utf-8')
+        sent = 0
+        while len(msg) != sent:
+            bytes_sent = client_sock.send(msg[sent:])
+            if bytes_sent == 0:
+                break
+            sent += bytes_sent
 
     def __accept_new_connection(self):
         """
