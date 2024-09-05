@@ -227,7 +227,7 @@ func receiveMessage(conn net.Conn) (string, error){
 		msg += line
 
 		if err != nil {
-			log.Errorf("action: apuesta_enviada | result: fail | dni: %v | numero: %v | error: %v",
+			log.Errorf("action: mensaje_enviado | result: fail | dni: %v | numero: %v | error: %v",
 				os.Getenv("DOCUMENTO"),
 				os.Getenv("NUMERO"),
 				err,
