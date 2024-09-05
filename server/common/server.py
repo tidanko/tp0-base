@@ -46,61 +46,67 @@ class Server:
         """
         bets_amount = 0
         try:
-            # TODO: Modify the receive to avoid short-reads
-            while True:
-                msg = client_sock.recv(1024).decode('utf-8')
-                if msg[-1] != '\n':
-                    raise OSError
-                msg = msg.rstrip()
-                if msg.split()[1] == 'ReadyForLottery':
-                    self.clients_finished += 1
-                    self.clients_sockets[msg.split()[1]] = client_sock
-                    if self.clients_finished == 5:
-                        logging.info('action: sorteo | result: success')
-                        bets = load_bets()
-                        amount_winners_by_agency = {}
-                        for bet in bets:
-                            if has_won(bet):
-                                amount_winners_by_agency[bet.agency] = amount_winners_by_agency.get(bet.agency, 0) + 1
-                        for agency in self.clients_sockets:
-                            msg = "Winners {}\n".format(amount_winners_by_agency[agency]).encode('utf-8')
-                            sent = 0
-                            while len(msg) != sent:
-                                bytes_sent = self.clients_sockets[agency].send(msg[sent:])
-                                if bytes_sent == 0:
-                                    raise OSError
-                                sent += bytes_sent
+            bets_list = []
+            keep_going = True
+            while keep_going:
+                for msg in self.__read_message(client_sock):
+                    if msg.split()[2] == 'ReadyForLottery':
+                        self.__manage_ready_for_lottery()
+                        return
+                    if msg.split()[2] == 'BetBatchEnd':
+                        store_bets(bets_list)
+                        logging.info(f'action: apuesta_recibida | result: success | cantidad: {bets_amount}')
+                        self.__send_message(client_sock, msg)
+                        keep_going = False
                         break
-                    return
-                if msg.split()[1] == 'BetBatchEnd':
-                    logging.info(f'action: apuesta_recibida | result: success | cantidad: ${bets_amount}')
-                    # TODO: Modify the send to avoid short-writes
-                    msg = "{}\n".format(msg).encode('utf-8')
-                    sent = 0
-                    while len(msg) != sent:
-                        bytes_sent = client_sock.send(msg[sent:])
-                        if bytes_sent == 0:
-                            break
-                        sent += bytes_sent
-                    break
-    
-                addr = client_sock.getpeername()
-                agency_id = msg.split(" ")[1].strip("]")
-                bet_info = msg.split(" ")[3].split(",")
-                if len(bet_info) < 5:
-                    raise OSError
-                logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
-                client_bet = Bet(agency_id, bet_info[1], bet_info[2], bet_info[3], bet_info[4], bet_info[0])
-                bets_amount += 1                         
-                store_bets([client_bet])
-                logging.info(f'action: apuesta_almacenada | result: success | dni: {msg[7]} | numero: {msg[5]}')
+                    addr = client_sock.getpeername()
+                    agency_id = msg.split(" ")[1].strip("]")
+                    bet_info = " ".join(msg.split(" ")[3:]).split(",")
+                    if len(bet_info) < 5:
+                        raise OSError
+                    logging.debug(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+                    bets_list.append(Bet(agency_id, bet_info[1], bet_info[2], bet_info[3], bet_info[4], bet_info[0]))
+                    bets_amount += 1                         
+                    logging.debug(f'action: apuesta_almacenada | result: success | dni: {bet_info[3]} | numero: {bet_info[0]}')
 
         except OSError as e:
-            logging.error("action: receive_message | result: fail | error: {e}")
-            logging.error("action: apuesta_almacenada | result: fail | error: {e}")
-            logging.info(f'action: apuesta_recibida | result: success | cantidad: ${bets_amount}')
+            logging.error(f'action: apuesta_recibida | result: fail | error: {e}')
         finally:
             client_sock.close()
+
+    def __manage_ready_for_lottery(self, client_sock, msg):
+        self.clients_finished += 1
+        self.clients_sockets[msg.split(" ")[1].strip("]")] = client_sock
+        if self.clients_finished == 5:
+            logging.info('action: sorteo | result: success')
+            self.__send_lottery_results()
+
+    def __send_lottery_results(self):
+        bets = load_bets()
+        amount_winners_by_agency = {}
+        for bet in bets:
+            if has_won(bet):
+                amount_winners_by_agency[bet.agency] = amount_winners_by_agency.get(bet.agency, 0) + 1
+        for agency in self.clients_sockets:
+            self.__send_message(self.clients_sockets[agency], f"Winners {amount_winners_by_agency[amount_winners_by_agency]}")       
+
+    def __read_message(self, client_sock):
+        msg = ''
+        while msg == '' or msg[-1] != '\n':
+            received = client_sock.recv(1024).decode('utf-8')
+            if received == '':
+                raise OSError
+            msg += received
+        return msg.rstrip().split('\n')
+
+    def __send_message(self, client_sock, msg):
+        msg = "{}\n".format(msg).encode('utf-8')
+        sent = 0
+        while len(msg) != sent:
+            bytes_sent = client_sock.send(msg[sent:])
+            if bytes_sent == 0:
+                break
+            sent += bytes_sent
 
     def __accept_new_connection(self):
         """
