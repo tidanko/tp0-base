@@ -36,11 +36,6 @@ func NewClient(config ClientConfig) *Client {
 		config: config,
 		down: false,
 	}
-	os.Setenv("NUMERO", "1111")
-	os.Setenv("NOMBRE", "Sergio")
-	os.Setenv("APELLIDO", "CHouza")
-	os.Setenv("DOCUMENTO", "41567345")
-	os.Setenv("NACIMIENTO", "1999-06-20")
 	return client
 }
 
