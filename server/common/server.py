@@ -54,11 +54,12 @@ class Server:
             bets_amount = 0
             while True:
                 for msg in self.__read_message(client_sock):
-                    if msg.split()[2] == 'ReadyForLottery':
+                    splitted_msg = msg.split()
+                    if splitted_msg[2] == 'ReadyForLottery':
                         self.barrier.wait()
                         self.__send_lottery_results(client_sock, agency_id)
                         return
-                    if msg.split()[2] == 'BetBatchEnd':
+                    if splitted_msg[2] == 'BetBatchEnd':
                         self.file_lock.acquire()
                         store_bets(bets_list)
                         self.file_lock.release()
@@ -68,8 +69,8 @@ class Server:
                         bets_amount = 0
                         continue
                     addr = client_sock.getpeername()
-                    agency_id = msg.split(" ")[1].strip("]")
-                    bet_info = " ".join(msg.split(" ")[3:]).split(",")
+                    agency_id = splitted_msg[1].strip("]")
+                    bet_info = " ".join(splitted_msg[3:]).split(",")
                     if len(bet_info) < 5:
                         raise OSError
                     logging.debug(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
@@ -81,24 +82,24 @@ class Server:
             logging.error(f'action: mensaje_enviado | result: fail | error: {e}')
 
     def __send_lottery_results(self, client_sock, agency_id):
-        self.file_lock.acquire()
-        bets = load_bets()
-        self.file_lock.release()
         amount_winners_agency = 0
-        for bet in bets:
+        for bet in load_bets():
             if bet.agency == int(agency_id) and has_won(bet):
-                amount_winners_by_agency += 1
+                amount_winners_agency += 1
         self.__send_message(client_sock, f"Winners {amount_winners_agency}")
         client_sock.close()     
 
     def __read_message(self, client_sock):
-        msg = ''
-        while msg == '' or msg[-1] != '\n':
-            received = client_sock.recv(1024).decode('utf-8')
-            if received == '':
-                raise OSError
+        msg = b''
+        while True:
+            received = client_sock.recv(1024)
             msg += received
-        return msg.rstrip().split('\n')
+            try:
+                if msg.decode('utf-8')[-1] == '\n':
+                    break
+            except:
+                continue
+        return msg.decode('utf-8').rstrip().split('\n')
 
     def __send_message(self, client_sock, msg):
         msg = "{}\n".format(msg).encode('utf-8')
